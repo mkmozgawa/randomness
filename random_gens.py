@@ -1,8 +1,10 @@
 import random
+from random import SystemRandom
 import math
 from fractions import Fraction
 import scipy.special as sc
 from scipy.stats import norm
+import numpy as np
 
 SEED = 1234567890
 
@@ -33,6 +35,11 @@ def mersenne_random_sample(n, interval):
         sample.append(int(observation))
     
     return sample
+
+def urandom_sample(n, interval):
+    lower, upper = interval[0], interval[1]
+    cryptogen = SystemRandom()
+    return [cryptogen.randrange(lower, upper) for i in range(n)]
 
 def list_to_string(lst):
     lst = [str(x) for x in lst]
@@ -110,6 +117,7 @@ def cumulative_sums(bits_arr, mode):
     2. Policz sumy kolejnych coraz dłuższych podciągów bitów.
     3. Oblicz z = max_{1<=k<=n}|S_{k}} będące największą z wartości bezwzględnych sum z punktu 2.
     4. Policz P-value z podanego wzoru.
+    5. Jeśli P-value jest mniejsze niż ustalony poziom istotności, to ciąg NIE JEST losowy. W innym przypadku ciąg JEST losowy.
     Rekomendacja: co najmniej 100 bitów wejścia.
     W mode=0 wysokie P-value świadczy o zbyt wielu zerach lub jedynkach na początku ciągu, w mode=1 - na końcu ciągu.
     Niskie P-value świadczy o zbyt równym wymieszaniu zer i jedynek.
@@ -146,6 +154,53 @@ def cumulative_sums(bits_arr, mode):
     p = 1 - sub + add
     return(p >= 0.01)
 
+def process_blocks_of_m_length(bits_arr, m):
+    '''
+    Kroki 1-4 metody approximate_entropy
+    '''
+    n = len(bits_arr)
+    bits_to_append = bits_arr[:m-1]
+    bits_arr = bits_arr + bits_to_append
+
+    seqs = []
+    for i in list(range(0, n)):
+        seqs.append(''.join(str(b) for b in bits_arr[i:i+m]))
+    
+    seqs_count = {}
+    for el in set(seqs):
+        seqs_count[el] = seqs.count(el)
+    
+    c_i_n = {}
+    for key, value in seqs_count.items():
+        c_i_n[key] = value / n
+
+    phi_m = 0
+    for key, value in c_i_n.items():
+        phi_m += value * math.log(value)
+
+    return phi_m
+
+def approximate_entropy(bits_arr, m):
+    '''
+    Input:
+    n bitów wejścia
+    m - długość bloku
+    Output:
+    status (True: ciąg oceniony jako losowy, False: ciąg oceniony jako nielosowy)
+    Rekomendacje: m, n takie że m < floor(log_2(n)) - 5
+    '''
+    n = len(bits_arr)
+    phi_m = process_blocks_of_m_length(bits_arr, m)
+    phi_m_1 = process_blocks_of_m_length(bits_arr, m+1)
+    
+    ap_en = phi_m - phi_m_1
+    print(ap_en)
+    chi_sq = 2*n*(math.log(2) - ap_en)
+    print(chi_sq)
+    p = sc.gammainc(2**(m-1), chi_sq/2)
+    print(p)
+    return(p >= 0.01)
+
 
 if __name__ == "__main__":
     lower = 0
@@ -155,12 +210,26 @@ if __name__ == "__main__":
 
     lcg_numbers = lcg_random_sample(n, [lower,upper+1])
     mersenne_numbers = mersenne_random_sample(n, [lower,upper])
+    urandom_numbers = urandom_sample(n, [lower, upper+1])
 
-    print(monobit_test(lcg_numbers))
-    print(monobit_test(mersenne_numbers))
+    print('LCG:')
+    print('Monobit test zdany: %s' % monobit_test(lcg_numbers))
+    print('Frequency test zdany: %s' % frequency_test(lcg_numbers, 20))
+    print('Cumulative sums test zdany: %s' % cumulative_sums(lcg_numbers, False))
+    print('Approximate entropy test zdany: %s' % approximate_entropy(lcg_numbers, 3))
 
-    print(frequency_test(lcg_numbers, 20))
-    print(frequency_test(mersenne_numbers, 20))
+    print('\nMersenne-Twister:')
+    print('Monobit test zdany: %s' % monobit_test(mersenne_numbers))
+    print('Frequency test zdany: %s' % frequency_test(mersenne_numbers, 20))
+    print('Cumulative sums test zdany: %s' % cumulative_sums(mersenne_numbers, False))
+    print('Approximate entropy test zdany: %s' % approximate_entropy(mersenne_numbers,3))
+
+    print('\nurandom:')
+    print('Monobit test zdany: %s' % monobit_test(urandom_numbers))
+    print('Frequency test zdany: %s' % frequency_test(urandom_numbers, 20))
+    print('Cumulative sums test zdany: %s' % cumulative_sums(urandom_numbers, False))
+    print('Approximate entropy test zdany: %s' % approximate_entropy(urandom_numbers, 3))
+
 
     # test the below with M=3 for NIST example
     # bits = [0,1,1,0,0,1,1,0,1,0]
@@ -171,5 +240,6 @@ if __name__ == "__main__":
     # print(cumulative_sums(bits, True)) should give a p =~ 0.219194
     # print(cumulative_sums(bits, False)) should give a p =~ 0.114866
 
-    print(cumulative_sums(lcg_numbers, False))
-    print(cumulative_sums(mersenne_numbers, False))
+    bits_s = list('1100100100001111110110101010001000100001011010001100001000110100110001001100011001100010100010111000')
+    bits = [int(b) for b in bits_s]
+    print(approximate_entropy(bits, 2))
