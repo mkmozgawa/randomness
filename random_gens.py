@@ -67,10 +67,11 @@ def monobit_test(bits_arr):
     n_ones, n_zeros = count_ones_zeros(bits_arr)
 
     S_abs = abs(n_ones - n_zeros)
-    p = math.erfc(S_abs/math.sqrt(n) * math.sqrt(2))
+    s_obs = S_abs / math.sqrt(n)
+    p = math.erfc(s_obs/math.sqrt(2))
     return(p >= 0.01)
 
-def frequency_test(bits_arr, M):
+def block_frequency_test(bits_arr, M):
     '''
     In:
     M - długość bloku
@@ -187,25 +188,27 @@ def approximate_entropy(bits_arr, m):
     m - długość bloku
     Output:
     status (True: ciąg oceniony jako losowy, False: ciąg oceniony jako nielosowy)
+    Kroki:
+    1. Dla m-długich nakładających się podciągów ciągu bitów wejścia policz ile jest różnych typów (np. dla 3-bitowych ciągów jest 2**3=8 podtypów) i policz ich entropię.
+    2. Dla m+1-długich ciągów zrób to samo.
+    3. Policz parametr ApEn będący różnicą (1) i (2). (Małe wartości ApEn sugerują regularność ciągu.)
+    4. Policz P-value jako (1- igamc(2**(m-1), chi-kwadrat/2)).
+    5. Jeśli P-value jest mniejsze niż ustalony poziom istotności, to ciąg NIE JEST losowy. W innym przypadku ciąg JEST losowy.
     Rekomendacje: m, n takie że m < floor(log_2(n)) - 5
     '''
-    n = len(bits_arr)
     phi_m = process_blocks_of_m_length(bits_arr, m)
     phi_m_1 = process_blocks_of_m_length(bits_arr, m+1)
     
     ap_en = phi_m - phi_m_1
-    print(ap_en)
     chi_sq = 2*n*(math.log(2) - ap_en)
-    print(chi_sq)
-    p = sc.gammainc(2**(m-1), chi_sq/2)
-    print(p)
+    p = 1 - sc.gammainc(2**(m-1), chi_sq/2)
     return(p >= 0.01)
 
 
 if __name__ == "__main__":
     lower = 0
     upper = 1
-    n = 100
+    n = 500
     random.seed(SEED)
 
     lcg_numbers = lcg_random_sample(n, [lower,upper+1])
@@ -214,32 +217,37 @@ if __name__ == "__main__":
 
     print('LCG:')
     print('Monobit test zdany: %s' % monobit_test(lcg_numbers))
-    print('Frequency test zdany: %s' % frequency_test(lcg_numbers, 20))
+    print('Frequency test within a block zdany: %s' % block_frequency_test(lcg_numbers, 20))
     print('Cumulative sums test zdany: %s' % cumulative_sums(lcg_numbers, False))
-    print('Approximate entropy test zdany: %s' % approximate_entropy(lcg_numbers, 3))
+    print('Approximate entropy test zdany: %s' % approximate_entropy(lcg_numbers, 2))
 
     print('\nMersenne-Twister:')
     print('Monobit test zdany: %s' % monobit_test(mersenne_numbers))
-    print('Frequency test zdany: %s' % frequency_test(mersenne_numbers, 20))
+    print('Frequency test within a block zdany: %s' % block_frequency_test(mersenne_numbers, 20))
     print('Cumulative sums test zdany: %s' % cumulative_sums(mersenne_numbers, False))
-    print('Approximate entropy test zdany: %s' % approximate_entropy(mersenne_numbers,3))
+    print('Approximate entropy test zdany: %s' % approximate_entropy(mersenne_numbers, 2))
 
     print('\nurandom:')
     print('Monobit test zdany: %s' % monobit_test(urandom_numbers))
-    print('Frequency test zdany: %s' % frequency_test(urandom_numbers, 20))
+    print('Frequency test within a block zdany: %s' % block_frequency_test(urandom_numbers, 20))
     print('Cumulative sums test zdany: %s' % cumulative_sums(urandom_numbers, False))
-    print('Approximate entropy test zdany: %s' % approximate_entropy(urandom_numbers, 3))
+    print('Approximate entropy test zdany: %s' % approximate_entropy(urandom_numbers, 2))
 
+    ## test z NISTa
+    # bits = [1,0,1,1,0,1,0,1,0,1]
+    # print(monobit_test(bits)) # p =~ 0.527
 
-    # test the below with M=3 for NIST example
+    ## test z NISTa
     # bits = [0,1,1,0,0,1,1,0,1,0]
-    # print(frequency_test(bits))
+    # print(block_frequency_test(bits, 3))
 
+    ## test z NISTa
     # bits_s = list('1100100100001111110110101010001000100001011010001100001000110100110001001100011001100010100010111000')
     # bits = [int(b) for b in bits_s]
-    # print(cumulative_sums(bits, True)) should give a p =~ 0.219194
-    # print(cumulative_sums(bits, False)) should give a p =~ 0.114866
+    # print(cumulative_sums(bits, True)) # p =~ 0.219194
+    # print(cumulative_sums(bits, False)) # p =~ 0.114866
 
-    bits_s = list('1100100100001111110110101010001000100001011010001100001000110100110001001100011001100010100010111000')
-    bits = [int(b) for b in bits_s]
-    print(approximate_entropy(bits, 2))
+    ## test z NISTa
+    # bits_s = list('1100100100001111110110101010001000100001011010001100001000110100110001001100011001100010100010111000')
+    # bits = [int(b) for b in bits_s]
+    # print(approximate_entropy(bits, 2)) # p =~ 0.2353
